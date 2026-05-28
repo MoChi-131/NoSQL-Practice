@@ -1,4 +1,4 @@
-# CM3104 NoSQL Coursework — Ready to Push
+# NoSQL Coursework
 
 This folder is prepared for GitHub submission and contains the key coursework deliverables:
 
