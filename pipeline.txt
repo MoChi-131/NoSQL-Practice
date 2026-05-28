@@ -1,0 +1,202 @@
+1a
+
+[
+  {
+    $lookup:
+      {
+        from: "answers",
+        localField: "accepted_answer_id",
+        foreignField: "id",
+        as: "accepted_answer"
+      }
+  },
+  {
+    $addFields: {
+      accepted_answer: {
+        $reduce: {
+          input: "$accepted_answer",
+          initialValue: null,
+          in: "$$this" 
+        }
+      }
+    }
+  },
+  {
+    $out:
+      {
+        db: "datadase_B",
+        coll: "questions_withAccepted_Answers"
+      }
+  }
+]
+
+
+
+1b
+
+[
+  {
+    $lookup: {
+      from: "questions",
+      localField: "id",
+      foreignField: "accepted_answer_id",
+      as: "related_questions"
+    }
+  },
+  {
+    $addFields: {
+      related_questions: {
+        $reduce: {
+          input: "$related_questions",
+          initialValue: null,
+          in: "$$this"
+        }
+      }
+    }
+  },
+  {
+    $out: {
+      db: "datadase_B",
+      coll: "answers_withRelated_Answers"
+    }
+  }
+]
+
+
+2(i) - database A
+
+db.getCollection('badges').aggregate(
+  [
+    {
+      $match: {
+        name: 'Nice Question',
+        date: {
+          $gte: ISODate(
+            '2020-01-01T00:00:00.000Z'
+          )
+        }
+      }
+    },
+    {
+      $lookup: {
+        from: 'questions',
+        localField: 'user_id',
+        foreignField: 'owner_user_id',
+        as: 'awared_question'
+      }
+    },
+    {
+      $lookup: {
+        from: 'users',
+        localField: 'user_id',
+        foreignField: 'id',
+        as: 'awared_user'
+      }
+    },
+    {
+      $addFields: {
+        awared_user: {
+          $reduce: {
+            input: '$awared_user',
+            initialValue: null,
+            in: '$$this'
+          }
+        }
+      }
+    },
+    {
+      $unwind: {
+        path: '$awared_question',
+        preserveNullAndEmptyArrays: true
+      }
+    },
+    {
+      $lookup: {
+        from: 'answers',
+        localField:
+          'awared_question.accepted_answer_id',
+        foreignField: 'id',
+        as: 'accepted_answer'
+      }
+    },
+    {
+      $addFields: {
+        accepted_answer: {
+          $reduce: {
+            input: '$accepted_answer',
+            initialValue: null,
+            in: '$$this'
+          }
+        }
+      }
+    },
+    {
+      $project: {
+        user_id: '$user_id',
+        user_display_name:
+          '$awared_user.display_name',
+        badge_name: '$name',
+        date: '$date',
+        question_id: '$awared_question.id',
+        question_title: '$awared_question.title',
+        accepted_answer_id: '$accepted_answer.id',
+        accepted_answer_score:
+          '$accepted_answer.score'
+      }
+    }
+  ],
+  { maxTimeMS: 60000, allowDiskUse: true }
+);
+
+
+2(i) - databse_B
+
+db.getCollection('user_withBadges').aggregate(
+  [
+    {
+      $unwind: {
+        path: '$user_badges',
+        preserveNullAndEmptyArrays: true
+      }
+    },
+    {
+      $match: {
+        'user_badges.name': 'Nice Question',
+        'user_badges.date': {
+          $gte: ISODate(
+            '2020-01-01T00:00:00.000Z'
+          )
+        }
+      }
+    },
+    {
+      $lookup: {
+        from: 'questions_withAccepted_Answers',
+        localField: 'user_badges.user_id',
+        foreignField: 'owner_user_id',
+        as: 'awared_question'
+      }
+    },
+    {
+      $unwind: {
+        path: '$awared_question',
+        preserveNullAndEmptyArrays: true
+      }
+    },
+    {
+      $project: {
+        user_id: '$id',
+        user_display_name: '$display_name',
+        badge_name: '$user_badges.name',
+        date: '$user_badges.date',
+        question_id: '$awared_question.id',
+        question_title: '$awared_question.title',
+        accepted_answer_id:
+          '$awared_question.accepted_answer.id',
+        accepted_answer_score:
+          '$awared_question.accepted_answer.score'
+      }
+    }
+  ],
+  { maxTimeMS: 60000, allowDiskUse: true }
+);
